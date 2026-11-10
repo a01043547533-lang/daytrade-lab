@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>단타 전략 검증기</title>
+<script src="/static/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1d2330;--muted:#667085;--line:#e4e7ec;--brand:#2f5bea;--up:#d92d20;--down:#1570ef;--warn:#b54708;--warnbg:#fffaeb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+header{background:var(--ink);color:#fff;padding:22px 16px}
+header .in,main{max-width:1080px;margin:0 auto}
+header h1{margin:0;font-size:22px}header p{margin:4px 0 0;color:#c8ccd4;font-size:14px}
+nav{display:flex;gap:6px;flex-wrap:wrap;max-width:1080px;margin:16px auto 0;padding:0 16px}
+nav button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;cursor:pointer;font:inherit;font-size:14px}
+nav button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+main{padding:16px}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+.card h2{margin:0 0 6px;font-size:18px}.card h3{margin:0 0 10px;font-size:15px}
+.muted{color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:12px}
+.kpi b{display:block;font-size:22px}.kpi span{color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;color:var(--muted)}
+input[type=number],input[type=text]{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer}
+.btn:disabled{opacity:.5}
+.notice{background:var(--warnbg);border:1px solid #fedf89;color:var(--warn);border-radius:10px;padding:10px 12px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600;background:#fafbfc}
+.tw{overflow-x:auto}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.verdict{font-weight:600;margin:10px 0}
+.err{color:var(--up);font-size:14px;margin-top:8px}
+code{background:#f2f4f7;padding:1px 5px;border-radius:4px}
+ol li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>단타 전략 검증기 <small style="font-weight:400;color:#c8ccd4">DayTrade Strategy Lab</small></h1>
+  <p>단타 자동매매 전략이 수수료·세금·미끄러짐을 빼고도 돈을 버는 구조인지 데이터로 확인합니다.</p>
+</div></header>
+<nav id="tabs">
+  <button data-t="home" class="on">소개</button>
+  <button data-t="be">① 손익분기 계산</button>
+  <button data-t="an">② 매매기록 분석</button>
+  <button data-t="sim">③ 청산 시뮬레이션</button>
+  <button data-t="grid">④ 설정 비교</button>
+</nav>
+<main>
+
+<section id="home" class="on">
+  <div class="card">
+    <h2>무엇을 하는 프로그램인가요?</h2>
+    <p>한국투자증권 API로 만든 단타 프로그램은 <b>익절 5% · 손절 2%</b>로 설정돼 있지만, 본전보호·추적스톱·시간손절이 겹치면서
+      실제 평균 수익은 5%보다 훨씬 작아집니다. 이 서비스는 그 차이를 숫자로 보여 주고, 어떤 설정이 나은지 비교합니다.</p>
+    <ol>
+      <li><b>손익분기 계산</b> — 본전이 되려면 승률이 몇 %여야 하는지</li>
+      <li><b>매매기록 분석</b> — 승률, 거래당 기대수익, 손익비(PF), 최대 낙폭, 청산사유·시간대별 성적</li>
+      <li><b>청산 시뮬레이션</b> — 분봉 데이터에 돌파 진입 + 청산 규칙을 적용해 거래를 재현</li>
+      <li><b>설정 비교</b> — 손절·익절·본전보호 조합을 한 번에 돌려 순위표 작성</li>
+    </ol>
+    <p class="notice">파일을 올리지 않으면 <b>합성 샘플 데이터(실제 시세 아님)</b>로 동작합니다. 실제 주문 기능은 없으며, 결과는 투자 권유가 아닙니다.</p>
+    <p class="muted">API 문서: <a href="/docs">/docs</a> · 분봉 CSV 예시: <a href="/api/sample/bars.csv">sample_bars.csv</a> · 기술: Python, FastAPI, uv, AWS EC2</p>
+  </div>
+</section>
+
+<section id="be">
+  <div class="card">
+    <h2>① 손익분기 승률 계산</h2>
+    <p class="muted">익절·손절 가격에 정확히 체결된다고 가정한 이론값입니다.</p>
+    <div class="form">
+      <div><label>익절 %</label><input type="number" id="be_tp" value="5" step="0.1"></div>
+      <div><label>손절 %</label><input type="number" id="be_sl" value="2" step="0.1"></div>
+      <div><label>수수료 % (편도)</label><input type="number" id="be_fee" value="0.015" step="0.001"></div>
+      <div><label>거래세 % (매도)</label><input type="number" id="be_tax" value="0.2" step="0.01"></div>
+      <div><label>미끄러짐 % (편도)</label><input type="number" id="be_slip" value="0.1" step="0.01"></div>
+    </div>
+    <button class="btn" id="be_go">계산</button>
+    <div id="be_out"></div>
+  </div>
+</section>
+
+<section id="an">
+  <div class="card">
+    <h2>② 매매기록 분석</h2>
+    <p class="muted">CSV에 <code>net_return_pct</code>(순수익률 %) 열이 있어야 합니다. 한투 단타 프로그램의 <code>trades_v12.csv</code>를 그대로 올릴 수 있습니다.
+      선택 열: <code>reason</code>, <code>time</code>, <code>mfe_pct</code>, <code>mae_pct</code></p>
+    <div class="form"><div><label>매매기록 CSV (비우면 샘플)</label><input type="file" id="an_file" accept=".csv"></div></div>
+    <button class="btn" id="an_go">분석</button>
+    <div id="an_out"></div>
+  </div>
+</section>
+
+<section id="sim">
+  <div class="card">
+    <h2>③ 청산 규칙 시뮬레이션</h2>
+    <p class="muted">진입: 진입시간 안에서 <b>당일 고가 돌파 + 거래량 급증 + VWAP 근처 + 시가 대비 상승률 범위</b>를 만족한 분봉 종가.
+      한 봉 안의 순서를 모르므로 손절을 먼저 확인합니다(보수적). 분봉 CSV 열: <code>code,datetime,open,high,low,close,volume</code></p>
+    <div class="form"><div><label>분봉 CSV (비우면 샘플)</label><input type="file" id="sim_file" accept=".csv"></div></div>
+    <div class="form" id="sim_rules"></div>
+    <button class="btn" id="sim_go">시뮬레이션</button>
+    <div id="sim_out"></div>
+  </div>
+</section>
+
+<section id="grid">
+  <div class="card">
+    <h2>④ 설정 비교 (그리드 탐색)</h2>
+    <p class="muted">입력한 손절·익절 값의 모든 조합(본전보호 켬/끔 포함)을 같은 데이터로 돌려 거래당 기대수익 순으로 정렬합니다.
+      <b>과거에 잘 맞은 설정이 앞으로도 맞는다는 보장은 없습니다(과최적화 주의).</b></p>
+    <div class="form">
+      <div><label>분봉 CSV (비우면 샘플)</label><input type="file" id="grid_file" accept=".csv"></div>
+      <div><label>손절 % 목록 (쉼표)</label><input type="text" id="grid_sl" value="1.5, 2, 3"></div>
+      <div><label>익절 % 목록 (쉼표)</label><input type="text" id="grid_tp" value="3, 5, 8"></div>
+    </div>
+    <button class="btn" id="grid_go">비교 실행</button>
+    <div id="grid_out"></div>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = (v, d=2) => v === null || v === undefined ? '-' : Number(v).toFixed(d);
+const cls = v => v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === b.dataset.t));
+});
+
+async function call(url, opt, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch(url, opt);
+    const j = await r.json();
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail));
+    return j;
+  } finally { btn.disabled = false; }
+}
+const showErr = (el, e) => el.innerHTML = `<p class="err">오류: ${esc(e.message)}</p>`;
+
+// ① 손익분기
+$('#be_go').onclick = async e => {
+  const body = {take_profit_pct:+$('#be_tp').value, stop_loss_pct:+$('#be_sl').value,
+    costs:{fee_pct:+$('#be_fee').value, sell_tax_pct:+$('#be_tax').value, slippage_pct:+$('#be_slip').value}};
+  try {
+    const j = await call('/api/breakeven', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}, e.target);
+    $('#be_out').innerHTML = `<div class="grid" style="margin-top:14px">
+      ${kpi('본전 승률', j.breakeven_win_rate_pct === null ? '불가' : fmt(j.breakeven_win_rate_pct,1)+'%')}
+      ${kpi('익절 시 순수익', fmt(j.net_win_pct,2)+'%', j.net_win_pct)}
+      ${kpi('손절 시 순손실', fmt(j.net_loss_pct,2)+'%', j.net_loss_pct)}
+      ${kpi('왕복 비용', fmt(j.round_trip_cost_pct,3)+'%')}</div>
+      <p class="muted">${esc(j.note)}</p>`;
+  } catch (err) { showErr($('#be_out'), err); }
+};
+const kpi = (label, val, sign) => `<div class="kpi"><span>${label}</span><b class="${sign===undefined?'':cls(sign)}">${val}</b></div>`;
+
+// 성과 표시 공통
+const charts = {};
+function perfHTML(p, id) {
+  if (!p.trades) return `<p class="notice">${esc(p.message || '거래가 없습니다.')}</p>`;
+  const grp = (rows, title) => `<h3 style="margin-top:16px">${title}</h3><div class="tw"><table><tr><th>구분</th><th>거래</th><th>승률%</th><th>평균%</th><th>합계%</th></tr>
+    ${rows.map(r => `<tr><td>${esc(r.group)}</td><td>${r.trades}</td><td>${fmt(r.win_rate_pct,1)}</td><td class="${cls(r.avg_return_pct)}">${fmt(r.avg_return_pct)}</td><td class="${cls(r.sum_return_pct)}">${fmt(r.sum_return_pct)}</td></tr>`).join('')}</table></div>`;
+  return `<p class="verdict">${esc(p.verdict)}</p>
+    <div class="grid">
+      ${kpi('거래 수', p.trades)}
+      ${kpi('승률', fmt(p.win_rate_pct,1)+'%')}
+      ${kpi('거래당 기대수익', fmt(p.expectancy_pct,3)+'%', p.expectancy_pct)}
+      ${kpi('손익비 (PF)', fmt(p.profit_factor,2))}
+      ${kpi('평균 수익', fmt(p.avg_win_pct)+'%', p.avg_win_pct)}
+      ${kpi('평균 손실', fmt(p.avg_loss_pct)+'%', p.avg_loss_pct)}
+      ${kpi('실제 필요 승률', p.breakeven_win_rate_from_avgs_pct===null?'-':fmt(p.breakeven_win_rate_from_avgs_pct,1)+'%')}
+      ${kpi('최대 낙폭', fmt(p.max_drawdown_pct)+'%p', p.max_drawdown_pct)}
+    </div>
+    <p class="muted">"실제 필요 승률"은 이 기록의 평균 수익·평균 손실로 계산한 본전 승률입니다. 현재 승률이 이보다 낮으면 손해 구조입니다.
+      ${p.avg_mfe_pct!==null?` 평균 MFE ${fmt(p.avg_mfe_pct)}% / 평균 MAE ${fmt(p.avg_mae_pct)}%.`:''}</p>
+    <h3 style="margin-top:16px">누적 수익률 곡선 (거래별 % 단순 합)</h3>
+    <div style="height:240px"><canvas id="${id}"></canvas></div>
+    ${grp(p.by_reason,'청산 사유별')}${p.by_hour.length?grp(p.by_hour,'진입 시간대별'):''}`;
+}
+function drawCurve(id, curve) {
+  if (charts[id]) charts[id].destroy();
+  const el = document.getElementById(id); if (!el || !window.Chart) return;
+  charts[id] = new Chart(el, {type:'line', data:{labels:curve.map((_,i)=>i+1),
+    datasets:[{data:curve, borderColor:'#2f5bea', borderWidth:2, pointRadius:0, fill:false}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{title:{display:true,text:'거래 순서'}}, y:{title:{display:true,text:'누적 %'}}}}});
+}
+
+// ② 매매기록 분석
+$('#an_go').onclick = async e => {
+  const fd = new FormData(); const f = $('#an_file').files[0]; if (f) fd.append('file', f);
+  try {
+    const j = await call('/api/analyze', {method:'POST', body:fd}, e.target);
+    $('#an_out').innerHTML = `<p class="muted" style="margin-top:12px">데이터: ${esc(j.source)}</p>` + perfHTML(j.performance, 'an_chart');
+    if (j.performance.trades) drawCurve('an_chart', j.performance.equity_curve);
+  } catch (err) { showErr($('#an_out'), err); }
+};
+
+// ③ 시뮬레이션
+const RULE_LABELS = {stop_loss_pct:'손절 %', take_profit_pct:'익절 %', breakeven_trigger_pct:'본전보호 발동 % (0=끔)',
+  breakeven_offset_pct:'본전보호 위치 %', trail_trigger_pct:'추적스톱 발동 % (0=끔)', trail_pct:'추적스톱 폭 %',
+  time_stop_minutes:'시간손절 분 (0=끔)', time_stop_min_gain_pct:'시간손절 최소수익 %', entry_start:'진입 시작', entry_end:'진입 종료',
+  force_exit:'강제 청산', min_change_pct:'최소 상승률 %', max_change_pct:'최대 상승률 %', min_volume_ratio:'거래량 배수',
+  max_vwap_gap_pct:'VWAP 최대 이격 %', max_trades_per_day:'하루 최대 거래'};
+let DEFAULTS;
+fetch('/api/defaults').then(r=>r.json()).then(d => {
+  DEFAULTS = d.rules;
+  $('#sim_rules').innerHTML = Object.entries(RULE_LABELS).map(([k,l]) =>
+    `<div><label>${l}</label><input ${typeof d.rules[k]==='string'?'type="text"':'type="number" step="0.1"'} data-k="${k}" value="${d.rules[k]}"></div>`).join('');
+});
+function readRules() {
+  const r = {...DEFAULTS};
+  document.querySelectorAll('#sim_rules input').forEach(i => r[i.dataset.k] = i.type === 'number' ? +i.value : i.value);
+  return r;
+}
+$('#sim_go').onclick = async e => {
+  const fd = new FormData(); const f = $('#sim_file').files[0]; if (f) fd.append('file', f);
+  fd.append('rules', JSON.stringify(readRules()));
+  try {
+    const j = await call('/api/simulate', {method:'POST', body:fd}, e.target);
+    const t = j.trades.slice(-200).reverse();
+    $('#sim_out').innerHTML = `<p class="muted" style="margin-top:12px">데이터: ${esc(j.source)} · ${j.days}일 · ${j.symbols}종목</p>`
+      + perfHTML(j.performance, 'sim_chart')
+      + `<h3 style="margin-top:16px">거래 내역 (최근 ${t.length}건)</h3><div class="tw"><table><tr><th>날짜</th><th>종목</th><th>진입</th><th>청산</th><th>사유</th><th>진입가</th><th>청산가</th><th>순수익%</th><th>MFE%</th><th>MAE%</th><th>보유(분)</th></tr>
+      ${t.map(x=>`<tr><td>${x.date}</td><td>${esc(x.code)}</td><td>${x.entry_time}</td><td>${x.exit_time}</td><td>${esc(x.reason)}</td><td>${x.entry_price.toLocaleString()}</td><td>${x.exit_price.toLocaleString()}</td><td class="${cls(x.net_return_pct)}">${fmt(x.net_return_pct)}</td><td>${fmt(x.mfe_pct)}</td><td>${fmt(x.mae_pct)}</td><td>${x.hold_min}</td></tr>`).join('')}</table></div>`;
+    if (j.performance.trades) drawCurve('sim_chart', j.performance.equity_curve);
+  } catch (err) { showErr($('#sim_out'), err); }
+};
+
+// ④ 그리드
+const nums = s => s.split(',').map(x => +x.trim()).filter(x => x > 0);
+$('#grid_go').onclick = async e => {
+  const fd = new FormData(); const f = $('#grid_file').files[0]; if (f) fd.append('file', f);
+  fd.append('config', JSON.stringify({rules: DEFAULTS ? readRules() : undefined, stop_loss_list: nums($('#grid_sl').value), take_profit_list: nums($('#grid_tp').value), compare_breakeven:true}));
+  try {
+    const j = await call('/api/grid', {method:'POST', body:fd}, e.target);
+    $('#grid_out').innerHTML = `<p class="muted" style="margin-top:12px">데이터: ${esc(j.source)} · 진입 조건은 ③ 시뮬레이션 탭의 값을 사용합니다.</p>
+      <div class="tw"><table><tr><th>순위</th><th>손절%</th><th>익절%</th><th>본전보호</th><th>거래</th><th>승률%</th><th>기대수익%</th><th>PF</th><th>합계%</th><th>최대낙폭%p</th></tr>
+      ${j.results.map(r=>`<tr><td>${r.rank}</td><td>${r.stop_loss_pct}</td><td>${r.take_profit_pct}</td><td>${r.breakeven?'켬':'끔'}</td><td>${r.trades}</td><td>${fmt(r.win_rate_pct,1)}</td><td class="${cls(r.expectancy_pct)}">${fmt(r.expectancy_pct,3)}</td><td>${fmt(r.profit_factor)}</td><td class="${cls(r.sum_return_pct)}">${fmt(r.sum_return_pct)}</td><td>${fmt(r.max_drawdown_pct)}</td></tr>`).join('')}</table></div>`;
+  } catch (err) { showErr($('#grid_out'), err); }
+};
+</script>
+</body>
+</html>
